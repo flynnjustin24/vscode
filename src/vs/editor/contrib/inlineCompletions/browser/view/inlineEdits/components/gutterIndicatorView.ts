@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ModifierKeyEmitter, n, trackFocus } from '../../../../../../../base/browser/dom.js';
+import { n } from '../../../../../../../base/browser/dom.js';
 import { renderIcon } from '../../../../../../../base/browser/ui/iconLabel/iconLabels.js';
 import { Codicon } from '../../../../../../../base/common/codicons.js';
 import { BugIndicatingError } from '../../../../../../../base/common/errors.js';
@@ -13,9 +13,7 @@ import { IAccessibilityService } from '../../../../../../../platform/accessibili
 import { IHoverService } from '../../../../../../../platform/hover/browser/hover.js';
 import { IInstantiationService } from '../../../../../../../platform/instantiation/common/instantiation.js';
 import { IThemeService } from '../../../../../../../platform/theme/common/themeService.js';
-import { IEditorMouseEvent } from '../../../../../../browser/editorBrowser.js';
 import { ObservableCodeEditor } from '../../../../../../browser/observableCodeEditor.js';
-import { Point } from '../../../../../../common/core/2d/point.js';
 import { Rect } from '../../../../../../common/core/2d/rect.js';
 import { HoverService } from '../../../../../../../platform/hover/browser/hoverService.js';
 import { HoverWidget } from '../../../../../../../platform/hover/browser/hoverWidget.js';
@@ -35,6 +33,7 @@ import { InlineCompletionsModel } from '../../../model/inlineCompletionsModel.js
 import { InlineSuggestAlternativeAction } from '../../../model/InlineSuggestAlternativeAction.js';
 import { asCssVariable } from '../../../../../../../platform/theme/common/colorUtils.js';
 import { ThemeIcon } from '../../../../../../../base/common/themables.js';
+import { IUserInteractionService } from '../../../../../../../platform/userInteraction/common/userInteraction.js';
 
 /**
  * Customization options for the gutter indicator appearance and behavior.
@@ -107,7 +106,8 @@ export class InlineEditsGutterIndicator extends Disposable {
 		@IHoverService protected readonly _hoverService: HoverService,
 		@IInstantiationService private readonly _instantiationService: IInstantiationService,
 		@IAccessibilityService private readonly _accessibilityService: IAccessibilityService,
-		@IThemeService private readonly _themeService: IThemeService
+		@IThemeService private readonly _themeService: IThemeService,
+		@IUserInteractionService private readonly _userInteractionService: IUserInteractionService
 	) {
 		super();
 
@@ -118,6 +118,8 @@ export class InlineEditsGutterIndicator extends Disposable {
 			? observableFromEvent(this._stickyScrollController.onDidChangeStickyScrollHeight, () => this._stickyScrollController!.stickyScrollWidgetHeight)
 			: constObservable(0);
 
+		this._isHoveredOverInlineEditDebounced = debouncedObservable(this._isHoveringOverInlineEdit, 100);
+
 		const indicator = this._indicator.keepUpdated(this._store);
 
 		this._register(this._editorObs.createOverlayWidget({
@@ -127,29 +129,8 @@ export class InlineEditsGutterIndicator extends Disposable {
 			minContentWidthInPx: constObservable(0),
 		}));
 
-		this._register(this._editorObs.editor.onMouseMove((e: IEditorMouseEvent) => {
-			const state = this._state.get();
-			if (state === undefined) { return; }
-
-			const el = this._iconRef.element;
-			const rect = el.getBoundingClientRect();
-			const rectangularArea = Rect.fromLeftTopWidthHeight(rect.left, rect.top, rect.width, rect.height);
-			const point = new Point(e.event.posx, e.event.posy);
-			this._isHoveredOverIcon.set(rectangularArea.containsPoint(point), undefined);
-		}));
-
-		this._register(this._editorObs.editor.onDidScrollChange(() => {
-			this._isHoveredOverIcon.set(false, undefined);
-		}));
-
-		this._isHoveredOverInlineEditDebounced = debouncedObservable(this._isHoveringOverInlineEdit, 100);
-
-		// pulse animation when hovering inline edit
-		this._register(runOnChange(this._isHoveredOverInlineEditDebounced, (isHovering) => {
-			if (isHovering) {
-				this.triggerAnimation();
-			}
-		}));
+		this._isHoveredOverIcon = this._userInteractionService.createHoverTracker(this._iconRef.element, this._store);
+		this._isHoveredOverIconDebounced = debouncedObservable(this._isHoveredOverIcon, 100);
 
 		this._register(autorun(reader => {
 			indicator.readEffect(reader);
@@ -158,11 +139,18 @@ export class InlineEditsGutterIndicator extends Disposable {
 				this._editorObs.editor.applyFontInfo(indicator.element);
 			}
 		}));
+
+		// pulse animation when hovering inline edit
+		this._register(runOnChange(this._isHoveredOverInlineEditDebounced, (isHovering) => {
+			if (isHovering) {
+				this.triggerAnimation();
+			}
+		}));
 	}
 
 	private readonly _isHoveredOverInlineEditDebounced: IObservable<boolean>;
 
-	private readonly _modifierPressed = observableFromEvent(this, ModifierKeyEmitter.getInstance().event, () => ModifierKeyEmitter.getInstance().keyStatus.shiftKey);
+	private readonly _modifierPressed = derived(this, reader => this._userInteractionService.readModifierKeyStatus(this._editorObs.editor.getDomNode()!, reader).shiftKey);
 	private readonly _gutterIndicatorStyles = derived(this, reader => {
 		let v = this._tabAction.read(reader);
 
@@ -450,9 +438,9 @@ export class InlineEditsGutterIndicator extends Disposable {
 	protected readonly _hoverVisible = observableValue(this, false);
 	public readonly isHoverVisible: IObservable<boolean> = this._hoverVisible;
 
-	private readonly _isHoveredOverIcon = observableValue(this, false);
-	private readonly _isHoveredOverIconDebounced: IObservable<boolean> = debouncedObservable(this._isHoveredOverIcon, 100);
-	public readonly isHoveredOverIcon: IObservable<boolean> = this._isHoveredOverIconDebounced;
+	private readonly _isHoveredOverIcon: IObservable<boolean>;
+	private readonly _isHoveredOverIconDebounced: IObservable<boolean>;
+	public get isHoveredOverIcon(): IObservable<boolean> { return this._isHoveredOverIconDebounced; }
 
 	protected _showHover(): void {
 		if (this._hoverVisible.get()) {
@@ -476,9 +464,10 @@ export class InlineEditsGutterIndicator extends Disposable {
 			},
 		).toDisposableLiveElement());
 
-		const focusTracker = disposableStore.add(trackFocus(content.element)); // TODO@benibenj should this be removed?
-		disposableStore.add(focusTracker.onDidBlur(() => this._focusIsInMenu.set(false, undefined)));
-		disposableStore.add(focusTracker.onDidFocus(() => this._focusIsInMenu.set(true, undefined)));
+		const isFocused = this._userInteractionService.createFocusTracker(content.element, disposableStore);
+		disposableStore.add(autorun(reader => {
+			this._focusIsInMenu.set(isFocused.read(reader), undefined);
+		}));
 		disposableStore.add(toDisposable(() => this._focusIsInMenu.set(false, undefined)));
 
 		const h = this._hoverService.showInstantHover({

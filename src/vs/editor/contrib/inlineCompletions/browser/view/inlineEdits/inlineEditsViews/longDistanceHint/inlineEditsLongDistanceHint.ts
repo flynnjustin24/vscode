@@ -42,6 +42,7 @@ import { ILanguageService } from '../../../../../../../common/languages/language
 import { getIconClasses } from '../../../../../../../common/services/getIconClasses.js';
 import { FileKind } from '../../../../../../../../platform/files/common/files.js';
 import { TextModelValueReference } from '../../../../model/textModelValueReference.js';
+import { IUserInteractionService } from '../../../../../../../../platform/userInteraction/common/userInteraction.js';
 
 const BORDER_RADIUS = 6;
 const MAX_WIDGET_WIDTH = { EMPTY_SPACE: 425, OVERLAY: 375 };
@@ -73,6 +74,7 @@ export class InlineEditsLongDistanceHint extends Disposable implements IInlineEd
 		@IKeybindingService private readonly _keybindingService: IKeybindingService,
 		@IModelService private readonly _modelService: IModelService,
 		@ILanguageService private readonly _languageService: ILanguageService,
+		@IUserInteractionService private readonly _userInteractionService: IUserInteractionService,
 	) {
 		super();
 
@@ -153,7 +155,10 @@ export class InlineEditsLongDistanceHint extends Disposable implements IInlineEd
 
 	private readonly _styles;
 
-	public get isHovered() { return this._widgetContent.get().didMouseMoveDuringHover; }
+	public readonly isHovered = derived(this, reader => {
+		const element = this._widgetContent.read(reader);
+		return this._userInteractionService.createHoverTracker(element.element, reader.store).read(reader);
+	});
 
 	private readonly _hintTextPosition = derived(this, (reader) => {
 		const viewState = this._viewState.read(reader);

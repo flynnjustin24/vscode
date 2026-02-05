@@ -39,10 +39,10 @@ import { IHostColorSchemeService } from '../common/hostColorSchemeService.js';
 import { RunOnceScheduler, Sequencer } from '../../../../base/common/async.js';
 import { IUserDataInitializationService } from '../../userData/browser/userDataInit.js';
 import { getIconsStyleSheet } from '../../../../platform/theme/browser/iconsStyleSheet.js';
-import { asCssVariableName, getColorRegistry } from '../../../../platform/theme/common/colorRegistry.js';
-import { asCssVariableName as asSizeCssVariableName, getSizeRegistry, sizeValueToCss } from '../../../../platform/theme/common/sizeRegistry.js';
+import { getColorRegistry } from '../../../../platform/theme/common/colorRegistry.js';
 import { ILanguageService } from '../../../../editor/common/languages/language.js';
 import { mainWindow } from '../../../../base/browser/window.js';
+import { generateColorThemeCSS } from './colorThemeCss.js';
 
 // implementation
 
@@ -157,7 +157,7 @@ export class WorkbenchThemeService extends Disposable implements IWorkbenchTheme
 			const colorScheme = this.settings.getPreferredColorScheme() ?? (isWeb ? ColorScheme.LIGHT : ColorScheme.DARK);
 			themeData = ColorThemeData.createUnloadedThemeForThemeType(colorScheme, defaultColorMap);
 		}
-		themeData.setCustomizations(this.settings);
+		themeData = themeData.withCustomizations(this.settings);
 		this.applyTheme(themeData, undefined, true);
 
 		const fileIconData = FileIconThemeData.fromStorageData(this.storageService);
@@ -262,24 +262,20 @@ export class WorkbenchThemeService extends Disposable implements IWorkbenchTheme
 			if (e.affectsConfiguration(ThemeSettings.PRODUCT_ICON_THEME)) {
 				this.restoreProductIconTheme();
 			}
-			if (this.currentColorTheme) {
-				let hasColorChanges = false;
-				if (e.affectsConfiguration(ThemeSettings.COLOR_CUSTOMIZATIONS)) {
-					this.currentColorTheme.setCustomColors(this.settings.colorCustomizations);
-					hasColorChanges = true;
-				}
-				if (e.affectsConfiguration(ThemeSettings.TOKEN_COLOR_CUSTOMIZATIONS)) {
-					this.currentColorTheme.setCustomTokenColors(this.settings.tokenColorCustomizations);
-					hasColorChanges = true;
-				}
-				if (e.affectsConfiguration(ThemeSettings.SEMANTIC_TOKEN_COLOR_CUSTOMIZATIONS)) {
-					this.currentColorTheme.setCustomSemanticTokenColors(this.settings.semanticTokenColorCustomizations);
-					hasColorChanges = true;
-				}
-				if (hasColorChanges) {
-					this.updateDynamicCSSRules(this.currentColorTheme);
-					this.onColorThemeChange.fire(this.currentColorTheme);
-				}
+			let newTheme = this.currentColorTheme;
+			if (e.affectsConfiguration(ThemeSettings.COLOR_CUSTOMIZATIONS)) {
+				newTheme = newTheme.withCustomColors(this.settings.colorCustomizations);
+			}
+			if (e.affectsConfiguration(ThemeSettings.TOKEN_COLOR_CUSTOMIZATIONS)) {
+				newTheme = newTheme.withCustomTokenColors(this.settings.tokenColorCustomizations);
+			}
+			if (e.affectsConfiguration(ThemeSettings.SEMANTIC_TOKEN_COLOR_CUSTOMIZATIONS)) {
+				newTheme = newTheme.withCustomSemanticTokenColors(this.settings.semanticTokenColorCustomizations);
+			}
+			if (newTheme !== this.currentColorTheme) {
+				this.currentColorTheme = newTheme;
+				this.updateDynamicCSSRules(this.currentColorTheme);
+				this.onColorThemeChange.fire(this.currentColorTheme);
 			}
 		}));
 	}
@@ -419,8 +415,8 @@ export class WorkbenchThemeService extends Disposable implements IWorkbenchTheme
 			}
 		}
 		try {
-			await themeData.ensureLoaded(this.extensionResourceLoaderService);
-			themeData.setCustomizations(this.settings);
+			themeData = await themeData.ensureLoaded(this.extensionResourceLoaderService);
+			themeData = themeData.withCustomizations(this.settings);
 			return this.applyTheme(themeData, settingsTarget);
 		} catch (error) {
 			throw new Error(nls.localize('error.cannotloadtheme', "Unable to load {0}: {1}", themeData.location?.toString(), error.message));
@@ -431,9 +427,9 @@ export class WorkbenchThemeService extends Disposable implements IWorkbenchTheme
 	private reloadCurrentColorTheme() {
 		return this.colorThemeSequencer.queue(async () => {
 			try {
-				const theme = this.colorThemeRegistry.findThemeBySettingsId(this.currentColorTheme.settingsId) || this.currentColorTheme;
-				await theme.reload(this.extensionResourceLoaderService);
-				theme.setCustomizations(this.settings);
+				let theme = this.colorThemeRegistry.findThemeBySettingsId(this.currentColorTheme.settingsId) || this.currentColorTheme;
+				theme = await theme.reload(this.extensionResourceLoaderService);
+				theme = theme.withCustomizations(this.settings);
 				await this.applyTheme(theme, undefined, false);
 			} catch (error) {
 				this.logService.info('Unable to reload {0}: {1}', this.currentColorTheme.location?.toString());
@@ -444,13 +440,13 @@ export class WorkbenchThemeService extends Disposable implements IWorkbenchTheme
 	public async restoreColorTheme(): Promise<boolean> {
 		return this.colorThemeSequencer.queue(async () => {
 			const settingId = this.settings.colorTheme;
-			const theme = this.colorThemeRegistry.findThemeBySettingsId(settingId);
+			let theme = this.colorThemeRegistry.findThemeBySettingsId(settingId);
 			if (theme) {
 				if (settingId !== this.currentColorTheme.settingsId) {
 					await this.internalSetColorTheme(theme.id, undefined);
 				} else if (theme !== this.currentColorTheme) {
-					await theme.ensureLoaded(this.extensionResourceLoaderService);
-					theme.setCustomizations(this.settings);
+					theme = await theme.ensureLoaded(this.extensionResourceLoaderService);
+					theme = theme.withCustomizations(this.settings);
 					await this.applyTheme(theme, undefined, true);
 				}
 				return true;
@@ -460,36 +456,13 @@ export class WorkbenchThemeService extends Disposable implements IWorkbenchTheme
 	}
 
 	private updateDynamicCSSRules(themeData: IColorTheme) {
-		const cssRules = new Set<string>();
-		const ruleCollector = {
-			addRule: (rule: string) => {
-				if (!cssRules.has(rule)) {
-					cssRules.add(rule);
-				}
-			}
-		};
-		ruleCollector.addRule(`.monaco-workbench { forced-color-adjust: none; }`);
-		themingRegistry.getThemingParticipants().forEach(p => p(themeData, ruleCollector, this.environmentService));
-
-		const colorVariables: string[] = [];
-		for (const item of getColorRegistry().getColors()) {
-			const color = themeData.getColor(item.id, true);
-			if (color) {
-				colorVariables.push(`${asCssVariableName(item.id)}: ${color.toString()};`);
-			}
-		}
-
-		const sizeVariables: string[] = [];
-		for (const item of getSizeRegistry().getSizes()) {
-			const sizeValue = getSizeRegistry().resolveDefaultSize(item.id, themeData);
-			if (sizeValue) {
-				sizeVariables.push(`${asSizeCssVariableName(item.id)}: ${sizeValueToCss(sizeValue)};`);
-			}
-		}
-
-		ruleCollector.addRule(`.monaco-workbench { ${(colorVariables.concat(sizeVariables)).join('\n')} }`);
-
-		_applyRules([...cssRules].join('\n'), colorThemeRulesClassName);
+		const css = generateColorThemeCSS(
+			themeData,
+			'.monaco-workbench',
+			themingRegistry.getThemingParticipants(),
+			this.environmentService
+		);
+		_applyRules(css.code, colorThemeRulesClassName);
 	}
 
 	private applyTheme(newTheme: ColorThemeData, settingsTarget: ThemeSettingTarget, silent = false): Promise<IWorkbenchColorTheme | null> {
@@ -502,7 +475,6 @@ export class WorkbenchThemeService extends Disposable implements IWorkbenchTheme
 		}
 		this.container.classList.add(...newTheme.classNames);
 
-		this.currentColorTheme.clearCaches();
 		this.currentColorTheme = newTheme;
 		if (!this.colorThemingParticipantChangeListener) {
 			this.colorThemingParticipantChangeListener = themingRegistry.onThemingParticipantAdded(_ => this.updateDynamicCSSRules(this.currentColorTheme));

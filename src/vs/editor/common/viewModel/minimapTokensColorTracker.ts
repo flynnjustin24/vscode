@@ -57,7 +57,7 @@ export class MinimapTokensColorTracker extends Disposable {
 			// background color (basically invisible)
 			colorId = ColorId.DefaultBackground;
 		}
-		return this._colors[colorId];
+		return this._colors[colorId] ?? RGBA8.Empty;
 	}
 
 	public backgroundIsLight(): boolean {

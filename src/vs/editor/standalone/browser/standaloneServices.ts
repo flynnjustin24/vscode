@@ -10,6 +10,7 @@ import '../../common/services/languageFeatureDebounce.js';
 import '../../common/services/semanticTokensStylingService.js';
 import '../../common/services/languageFeaturesService.js';
 import '../../../platform/hover/browser/hoverService.js';
+import '../../../platform/userInteraction/browser/userInteractionService.js';
 import '../../browser/services/inlineCompletionsService.js';
 
 import * as strings from '../../../base/common/strings.js';

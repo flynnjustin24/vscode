@@ -161,42 +161,42 @@ suite('Themes - TokenStyleResolving', () => {
 			]
 		};
 
-		themeData.setCustomTokenColors(customTokenColors);
+		const themedData = themeData.withCustomTokenColors(customTokenColors);
 
 		let tokenStyle;
 		const defaultTokenStyle = undefined;
 
-		tokenStyle = themeData.resolveScopes([['variable']]);
+		tokenStyle = themedData.resolveScopes([['variable']]);
 		assertTokenStyle(tokenStyle, ts('#F8F8F2', unsetStyle), 'variable');
 
-		tokenStyle = themeData.resolveScopes([['keyword.operator']]);
+		tokenStyle = themedData.resolveScopes([['keyword.operator']]);
 		assertTokenStyle(tokenStyle, ts('#F92672', { italic: true, bold: true, underline: true }), 'keyword');
 
-		tokenStyle = themeData.resolveScopes([['keyword']]);
+		tokenStyle = themedData.resolveScopes([['keyword']]);
 		assertTokenStyle(tokenStyle, defaultTokenStyle, 'keyword');
 
-		tokenStyle = themeData.resolveScopes([['keyword.operator']]);
+		tokenStyle = themedData.resolveScopes([['keyword.operator']]);
 		assertTokenStyle(tokenStyle, ts('#F92672', { italic: true, bold: true, underline: true }), 'keyword.operator');
 
-		tokenStyle = themeData.resolveScopes([['keyword.operators']]);
+		tokenStyle = themedData.resolveScopes([['keyword.operators']]);
 		assertTokenStyle(tokenStyle, defaultTokenStyle, 'keyword.operators');
 
-		tokenStyle = themeData.resolveScopes([['storage']]);
+		tokenStyle = themedData.resolveScopes([['storage']]);
 		assertTokenStyle(tokenStyle, ts('#F92672', { italic: true, bold: false, underline: false }), 'storage');
 
-		tokenStyle = themeData.resolveScopes([['storage.type']]);
+		tokenStyle = themedData.resolveScopes([['storage.type']]);
 		assertTokenStyle(tokenStyle, ts('#66D9EF', { italic: true, bold: false, underline: false }), 'storage.type');
 
-		tokenStyle = themeData.resolveScopes([['entity.name.class']]);
+		tokenStyle = themedData.resolveScopes([['entity.name.class']]);
 		assertTokenStyle(tokenStyle, ts('#A6E22E', { italic: false, bold: false, underline: true }), 'entity.name.class');
 
-		tokenStyle = themeData.resolveScopes([['meta.structure.dictionary.json', 'string.quoted.double.json']]);
+		tokenStyle = themedData.resolveScopes([['meta.structure.dictionary.json', 'string.quoted.double.json']]);
 		assertTokenStyle(tokenStyle, ts('#66D9EF', undefined), 'json property');
 
-		tokenStyle = themeData.resolveScopes([['source.json', 'meta.structure.dictionary.json', 'string.quoted.double.json']]);
+		tokenStyle = themedData.resolveScopes([['source.json', 'meta.structure.dictionary.json', 'string.quoted.double.json']]);
 		assertTokenStyle(tokenStyle, ts('#66D9EF', undefined), 'json property');
 
-		tokenStyle = themeData.resolveScopes([['keyword'], ['storage.type'], ['entity.name.class']]);
+		tokenStyle = themedData.resolveScopes([['keyword'], ['storage.type'], ['entity.name.class']]);
 		assertTokenStyle(tokenStyle, ts('#66D9EF', { italic: true, bold: false, underline: false }), 'storage.type');
 
 	});
@@ -229,9 +229,9 @@ suite('Themes - TokenStyleResolving', () => {
 			]
 		};
 
-		themeData.setCustomTokenColors(customTokenColors);
+		const themedData = themeData.withCustomTokenColors(customTokenColors);
 
-		const tokenStyle = themeData.resolveScopes([['entity.name.type.class']]);
+		const tokenStyle = themedData.resolveScopes([['entity.name.type.class']]);
 		assertTokenStyle(tokenStyle, ts('#FF00FF', { italic: false, bold: false, underline: true }), 'entity.name.type.class');
 
 	});
@@ -239,20 +239,21 @@ suite('Themes - TokenStyleResolving', () => {
 
 	test('rule matching', async () => {
 		const themeData = ColorThemeData.createLoadedEmptyTheme('test', 'test');
-		themeData.setCustomColors({ 'editor.foreground': '#000000' });
-		themeData.setCustomSemanticTokenColors({
-			enabled: true,
-			rules: {
-				'type': '#ff0000',
-				'class': { foreground: '#0000ff', italic: true },
-				'*.static': { bold: true },
-				'*.declaration': { italic: true },
-				'*.async.static': { italic: true, underline: true },
-				'*.async': { foreground: '#000fff', underline: true }
-			}
-		});
+		const themedData = themeData
+			.withCustomColors({ 'editor.foreground': '#000000' })
+			.withCustomSemanticTokenColors({
+				enabled: true,
+				rules: {
+					'type': '#ff0000',
+					'class': { foreground: '#0000ff', italic: true },
+					'*.static': { bold: true },
+					'*.declaration': { italic: true },
+					'*.async.static': { italic: true, underline: true },
+					'*.async': { foreground: '#000fff', underline: true }
+				}
+			});
 
-		assertTokenStyles(themeData, {
+		assertTokenStyles(themedData, {
 			'type': ts('#ff0000', undefinedStyle),
 			'type.static': ts('#ff0000', { bold: true }),
 			'type.static.declaration': ts('#ff0000', { bold: true, italic: true }),
@@ -273,27 +274,28 @@ suite('Themes - TokenStyleResolving', () => {
 
 		try {
 			const themeData = ColorThemeData.createLoadedEmptyTheme('test', 'test');
-			themeData.setCustomColors({ 'editor.foreground': '#000000' });
-			themeData.setCustomSemanticTokenColors({
-				enabled: true,
-				rules: {
-					'interface': '#ff0000',
-					'myTestInterface': { italic: true },
-					'interface.static': { bold: true }
-				}
-			});
+			let themedData = themeData
+				.withCustomColors({ 'editor.foreground': '#000000' })
+				.withCustomSemanticTokenColors({
+					enabled: true,
+					rules: {
+						'interface': '#ff0000',
+						'myTestInterface': { italic: true },
+						'interface.static': { bold: true }
+					}
+				});
 
-			assertTokenStyles(themeData, { 'myTestSubInterface': ts('#ff0000', { italic: true }) });
-			assertTokenStyles(themeData, { 'myTestSubInterface.static': ts('#ff0000', { italic: true, bold: true }) });
+			assertTokenStyles(themedData, { 'myTestSubInterface': ts('#ff0000', { italic: true }) });
+			assertTokenStyles(themedData, { 'myTestSubInterface.static': ts('#ff0000', { italic: true, bold: true }) });
 
-			themeData.setCustomSemanticTokenColors({
+			themedData = themedData.withCustomSemanticTokenColors({
 				enabled: true,
 				rules: {
 					'interface': '#ff0000',
 					'myTestInterface': { foreground: '#ff00ff', italic: true }
 				}
 			});
-			assertTokenStyles(themeData, { 'myTestSubInterface': ts('#ff00ff', { italic: true }) });
+			assertTokenStyles(themedData, { 'myTestSubInterface': ts('#ff00ff', { italic: true }) });
 		} finally {
 			registry.deregisterTokenType('myTestInterface');
 			registry.deregisterTokenType('myTestSubInterface');
@@ -303,21 +305,22 @@ suite('Themes - TokenStyleResolving', () => {
 	test('language', async () => {
 		try {
 			const themeData = ColorThemeData.createLoadedEmptyTheme('test', 'test');
-			themeData.setCustomColors({ 'editor.foreground': '#000000' });
-			themeData.setCustomSemanticTokenColors({
-				enabled: true,
-				rules: {
-					'interface': '#fff000',
-					'interface:java': '#ff0000',
-					'interface.static': { bold: true },
-					'interface.static:typescript': { italic: true }
-				}
-			});
+			const themedData = themeData
+				.withCustomColors({ 'editor.foreground': '#000000' })
+				.withCustomSemanticTokenColors({
+					enabled: true,
+					rules: {
+						'interface': '#fff000',
+						'interface:java': '#ff0000',
+						'interface.static': { bold: true },
+						'interface.static:typescript': { italic: true }
+					}
+				});
 
-			assertTokenStyles(themeData, { 'interface': ts('#ff0000', undefined) }, 'java');
-			assertTokenStyles(themeData, { 'interface': ts('#fff000', undefined) }, 'typescript');
-			assertTokenStyles(themeData, { 'interface.static': ts('#ff0000', { bold: true }) }, 'java');
-			assertTokenStyles(themeData, { 'interface.static': ts('#fff000', { bold: true, italic: true }) }, 'typescript');
+			assertTokenStyles(themedData, { 'interface': ts('#ff0000', undefined) }, 'java');
+			assertTokenStyles(themedData, { 'interface': ts('#fff000', undefined) }, 'typescript');
+			assertTokenStyles(themedData, { 'interface.static': ts('#ff0000', { bold: true }) }, 'java');
+			assertTokenStyles(themedData, { 'interface.static': ts('#fff000', { bold: true, italic: true }) }, 'typescript');
 		} finally {
 		}
 	});
@@ -332,22 +335,23 @@ suite('Themes - TokenStyleResolving', () => {
 
 		try {
 			const themeData = ColorThemeData.createLoadedEmptyTheme('test', 'test');
-			themeData.setCustomColors({ 'editor.foreground': '#000000' });
-			themeData.setCustomTokenColors({
-				textMateRules: [
-					{
-						scope: 'entity.name.type',
-						settings: { foreground: '#aa0000' }
-					},
-					{
-						scope: 'entity.name.type.ts1',
-						settings: { foreground: '#bb0000' }
-					}
-				]
-			});
+			const themedData = themeData
+				.withCustomColors({ 'editor.foreground': '#000000' })
+				.withCustomTokenColors({
+					textMateRules: [
+						{
+							scope: 'entity.name.type',
+							settings: { foreground: '#aa0000' }
+						},
+						{
+							scope: 'entity.name.type.ts1',
+							settings: { foreground: '#bb0000' }
+						}
+					]
+				});
 
-			assertTokenStyles(themeData, { 'type': ts('#aa0000', undefined) }, 'javascript1');
-			assertTokenStyles(themeData, { 'type': ts('#bb0000', undefined) }, 'typescript1');
+			assertTokenStyles(themedData, { 'type': ts('#aa0000', undefined) }, 'javascript1');
+			assertTokenStyles(themedData, { 'type': ts('#bb0000', undefined) }, 'typescript1');
 
 		} finally {
 			registry.deregisterTokenStyleDefault(registry.parseTokenSelector('type', 'typescript1'));

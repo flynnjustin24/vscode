@@ -5,7 +5,7 @@
 
 import { createLogger, defineConfig, Plugin } from 'vite';
 import path, { join } from 'path';
-import { rollupEsmUrlPlugin } from '@vscode/rollup-plugin-esm-url';
+import { componentExplorer } from 'D:/dev/hediet/js-component-explorer/packages/vite-plugin';
 import { statSync } from 'fs';
 import { pathToFileURL } from 'url';
 
@@ -164,11 +164,21 @@ logger.warn = (msg, options) => {
 
 export default defineConfig({
 	plugins: [
-		rollupEsmUrlPlugin({}),
+		// rollupEsmUrlPlugin({}),
 		injectBuiltinExtensionsPlugin(),
-		createHotClassSupport()
+		createHotClassSupport(),
+		componentExplorer({
+			logLevel: 'verbose',
+			include: 'build/vite/**/*.fixture.ts',
+		}),
 	],
 	customLogger: logger,
+	resolve: {
+		alias: {
+			'@component-explorer/explorer': 'D:/dev/hediet/js-component-explorer/packages/explorer/src',
+			'~@vscode/codicons': '/node_modules/@vscode/codicons',
+		}
+	},
 	esbuild: {
 		tsconfigRaw: {
 			compilerOptions: {

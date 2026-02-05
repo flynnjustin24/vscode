@@ -10,6 +10,6 @@
   },
   "devDependencies": {
     "@vscode/rollup-plugin-esm-url": "^1.0.1-0",
-    "vite": "^7.1.11"
+    "vite": "npm:rolldown-vite@latest"
   }
 }
